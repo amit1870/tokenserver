@@ -2,7 +2,7 @@ import json
 import uuid
 import random
 import threading
-from time import time
+from time import time, sleep
 from flask import Flask, abort, jsonify
 from flask_restful import Resource, Api, reqparse
 
@@ -25,9 +25,6 @@ class Token:
     def get_refreshed_time(self):
         return self.refreshed_time
 
-    def update_generated_time(self, time_stamp=None):
-        self.generated_time = time() if time_stamp is None else time_stamp
-
     def update_refresh_time(self, time_stamp=None):
         self.refreshed_time = time() if time_stamp is None else time_stamp
 
@@ -37,7 +34,6 @@ class TokenGenerator(Resource):
         token_pool = [Token(str(uuid.uuid4())) for i in range(5)]
         token_obj_str = []
         for token_obj in token_pool:
-            token_obj.update_generated_time()
             token_obj.update_refresh_time()
             token_obj_str.append(token_obj.get_id())
         return token_obj_str
@@ -49,10 +45,12 @@ class AssignToken(Resource):
         if len(token_pool):
             index = random.randint(0,len(token_pool)-1)
             assigned_token = token_pool[index]
+            assigned_token.update_refresh_time(time())
             token_pool.remove(assigned_token)
             blocked_tokens.append(assigned_token)
         else:
             return abort(404)
+
         return assigned_token.get_id()
 
 class FreeToken(Resource):
@@ -60,6 +58,7 @@ class FreeToken(Resource):
         global token_pool, blocked_tokens
         for blocked_token in blocked_tokens:
             if blocked_token.get_id() == token:
+                blocked_token.update_refresh_time(time())
                 token_pool.append(blocked_token)
                 blocked_tokens.remove(blocked_token)
                 return '', 204
@@ -106,6 +105,7 @@ def free_blocked_token_after_60s():
                 blocked_tokens.remove(token)
                 token.update_refresh_time(time())
                 token_pool.append(token)
+
     thread = threading.Thread(target=run_job)
     thread.start()
 
